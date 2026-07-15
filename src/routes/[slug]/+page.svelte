@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
+	import { cubicIn, cubicOut } from "svelte/easing";
+	import { prefersReducedMotion } from "svelte/motion";
+	import { fly, scale } from "svelte/transition";
 	import type { Task } from "$lib/domain/entity/task";
 	import Markdoc from "@markdoc/markdoc";
 	import { browser } from "$app/environment";
@@ -452,6 +455,21 @@
 		settingsOpen = false;
 	}
 
+	function closePanelsOnOutsideClick(event: MouseEvent) {
+		if (!menuOpen && !settingsOpen) return;
+		if (!(event.target instanceof Element)) return;
+		if (event.target.closest("[data-panel], [data-panel-trigger]")) return;
+
+		closePanels();
+	}
+
+	function closePanelsOnPageScroll() {
+		if (!menuOpen && !settingsOpen) return;
+		if (isDesktopViewport()) return;
+
+		closePanels();
+	}
+
 	function openMenuOnDesktop() {
 		if (!isDesktopViewport()) return;
 		menuOpen = true;
@@ -572,12 +590,15 @@
 	<title>#{data.boardId}</title>
 </script:head>
 
+<svelte:window onclick={closePanelsOnOutsideClick} onscroll={closePanelsOnPageScroll} />
+
 {#snippet menuButton(classes: string)}
 	<button
 		type="button"
 		class={`relative z-40 grid size-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-950 ring-1 ring-slate-950/10 transition-[background-color,box-shadow,scale] duration-200 active:scale-[0.96] hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-slate-900 dark:text-slate-100 dark:ring-white/10 dark:hover:bg-slate-800 ${classes}`}
 		aria-label="Open boards menu"
 		aria-expanded={menuOpen}
+		data-panel-trigger
 		onclick={toggleMenu}
 		onmouseenter={openMenuOnDesktop}
 		onfocus={openMenuOnDesktop}
@@ -596,6 +617,7 @@
 		class={`relative z-40 grid size-10 shrink-0 items-center justify-center rounded-xl bg-white text-slate-950 ring-1 ring-slate-950/10 transition-[background-color,box-shadow,scale] duration-200 active:scale-[0.96] hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:bg-slate-900 dark:text-slate-100 dark:ring-white/10 dark:hover:bg-slate-800 ${classes}`}
 		aria-label="Board settings"
 		aria-expanded={settingsOpen}
+		data-panel-trigger
 		onclick={toggleSettings}
 		onmouseenter={openSettingsOnDesktop}
 		onfocus={openSettingsOnDesktop}
@@ -729,33 +751,98 @@
 	{@render settingsButton("lg:fixed lg:top-6 lg:right-6")}
 </header>
 
-<button
-	type="button"
-	class={`fixed inset-0 z-40 bg-slate-950/10 transition-opacity duration-300 lg:hidden dark:bg-slate-950/60 ${menuOpen || settingsOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
-	aria-label="Close panel"
-	onclick={closePanels}
-></button>
+{#if menuOpen}
+		<div
+			data-panel
+			class="fixed inset-x-3 bottom-[calc(--spacing(3)+env(safe-area-inset-bottom))] z-50 lg:hidden"
+			in:fly={{
+				x: prefersReducedMotion.current ? 0 : "-25vw",
+				opacity: 0,
+				duration: prefersReducedMotion.current ? 120 : 200,
+				easing: cubicOut
+			}}
+			out:fly={{
+				x: prefersReducedMotion.current ? 0 : "-50vw",
+				opacity: 0,
+				duration: prefersReducedMotion.current ? 120 : 300,
+				easing: cubicIn
+			}}
+		>
+			<div
+				class="origin-bottom-left"
+				in:scale={{
+					start: prefersReducedMotion.current ? 1 : 0.8,
+					opacity: 1,
+					duration: prefersReducedMotion.current ? 0 : 200,
+					easing: cubicOut
+				}}
+				out:scale={{
+					start: prefersReducedMotion.current ? 1 : 0.8,
+					opacity: 1,
+					duration: prefersReducedMotion.current ? 0 : 300,
+					easing: cubicIn
+				}}
+			>
+				<aside
+					class="min-h-[45dvh] max-h-[85dvh] overflow-y-auto rounded-[1.75rem] bg-white px-4 pt-5 pb-6 shadow-2xl ring-1 ring-slate-950/10 dark:bg-slate-900 dark:shadow-none dark:ring-white/10"
+				>
+					{@render menuPanelContent(true)}
+				</aside>
+			</div>
+		</div>
+{/if}
 
 <aside
-	class={`fixed inset-x-3 bottom-[calc(--spacing(3)+env(safe-area-inset-bottom))] z-50 min-h-[45dvh] max-h-[85dvh] overflow-y-auto rounded-[1.75rem] bg-white px-4 pt-5 pb-6 shadow-2xl ring-1 ring-slate-950/10 transition-transform duration-300 lg:hidden dark:bg-slate-900 dark:shadow-none dark:ring-white/10 ${menuOpen ? "translate-y-0" : "translate-y-[calc(100%+--spacing(6)+env(safe-area-inset-bottom))]"}`}
->
-	{@render menuPanelContent(true)}
-</aside>
-
-<aside
+	data-panel
 	class={`fixed inset-y-0 left-0 z-50 hidden h-dvh w-64 overflow-y-auto bg-white px-[14px] pt-4 pb-4 shadow-[0_8px_30px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/10 transition-transform duration-300 lg:block dark:bg-slate-900 dark:shadow-none dark:ring-white/10 ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
 	onmouseleave={closeMenuOnDesktop}
 >
 	{@render menuPanelContent(false)}
 </aside>
 
-<aside
-	class={`fixed inset-x-3 bottom-[calc(--spacing(3)+env(safe-area-inset-bottom))] z-50 min-h-[45dvh] max-h-[85dvh] overflow-y-auto rounded-[1.75rem] bg-white px-4 pt-5 pb-6 shadow-2xl ring-1 ring-slate-950/10 transition-transform duration-300 lg:hidden dark:bg-slate-900 dark:shadow-none dark:ring-white/10 ${settingsOpen ? "translate-y-0" : "translate-y-[calc(100%+--spacing(6)+env(safe-area-inset-bottom))]"}`}
->
-	{@render settingsPanelContent("mobile-expiration", "mobile-theme")}
-</aside>
+{#if settingsOpen}
+		<div
+			data-panel
+			class="fixed inset-x-3 bottom-[calc(--spacing(3)+env(safe-area-inset-bottom))] z-50 lg:hidden"
+			in:fly={{
+				x: prefersReducedMotion.current ? 0 : "25vw",
+				opacity: 0,
+				duration: prefersReducedMotion.current ? 120 : 200,
+				easing: cubicOut
+			}}
+			out:fly={{
+				x: prefersReducedMotion.current ? 0 : "50vw",
+				opacity: 0,
+				duration: prefersReducedMotion.current ? 120 : 300,
+				easing: cubicIn
+			}}
+		>
+			<div
+				class="origin-bottom-right"
+				in:scale={{
+					start: prefersReducedMotion.current ? 1 : 0.8,
+					opacity: 1,
+					duration: prefersReducedMotion.current ? 0 : 200,
+					easing: cubicOut
+				}}
+				out:scale={{
+					start: prefersReducedMotion.current ? 1 : 0.8,
+					opacity: 1,
+					duration: prefersReducedMotion.current ? 0 : 300,
+					easing: cubicIn
+				}}
+			>
+				<aside
+					class="min-h-[45dvh] max-h-[85dvh] overflow-y-auto rounded-[1.75rem] bg-white px-4 pt-5 pb-6 shadow-2xl ring-1 ring-slate-950/10 dark:bg-slate-900 dark:shadow-none dark:ring-white/10"
+				>
+					{@render settingsPanelContent("mobile-expiration", "mobile-theme")}
+				</aside>
+			</div>
+		</div>
+{/if}
 
 <aside
+	data-panel
 	class={`fixed inset-y-0 right-0 z-50 hidden h-dvh w-72 overflow-y-auto bg-white px-4 pt-4 pb-4 shadow-[0_8px_30px_rgba(15,23,42,0.08)] ring-1 ring-slate-950/10 transition-transform duration-300 lg:block dark:bg-slate-900 dark:shadow-none dark:ring-white/10 ${settingsOpen ? "translate-x-0" : "translate-x-full"}`}
 	onmouseleave={closeSettingsOnDesktop}
 >
